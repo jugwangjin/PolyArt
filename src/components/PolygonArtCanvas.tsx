@@ -20,14 +20,14 @@ const getMedianColor = (p1: Point, p2: Point, p3: Point, data: Uint8ClampedArray
   const cx = (p1[0] + p2[0] + p3[0]) / 3;
   const cy = (p1[1] + p2[1] + p3[1]) / 3;
   
-  // Sample 5 points inside the triangle to find a median color
-  // This prevents outlier "popping" colors
+  // 삼각형 내부의 5개 지점을 샘플링하여 중앙값(Median) 색상을 찾습니다.
+  // 이 방식은 튀는 색상(Outlier popping colors)이 선택되는 것을 방지합니다.
   const samples = [
     [cx, cy],
     [(2 * p1[0] + p2[0] + p3[0]) / 4, (2 * p1[1] + p2[1] + p3[1]) / 4],
     [(p1[0] + 2 * p2[0] + p3[0]) / 4, (p1[1] + 2 * p2[1] + p3[1]) / 4],
     [(p1[0] + p2[0] + 2 * p3[0]) / 4, (p1[1] + p2[1] + 2 * p3[1]) / 4],
-    [cx, cy] // Double weight to centroid
+    [cx, cy] // 중심점에 가중치를 두 배로 부여
   ];
 
   const rs = [], gs = [], bs = [];
@@ -71,7 +71,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
     img.onload = () => {
       imageRef.current = img;
       const maxWidth = 800;
-      const maxHeight = 800; // Increased to handle vertical images better
+      const maxHeight = 800; // 세로 이미지를 더 잘 처리하기 위해 높이 제한 증가
       let width = img.width;
       let height = img.height;
 
@@ -84,7 +84,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         height = maxHeight;
       }
 
-      // Floor dimensions to avoid sub-pixel issues in loops and arrays
+      // 루프 및 배열에서 서브 픽셀(sub-pixel) 문제가 발생하지 않도록 크기를 정수로 내림
       width = Math.floor(width);
       height = Math.floor(height);
 
@@ -126,7 +126,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
       const points: Point[] = [];
       
       const addPoint = (x: number, y: number) => {
-        // Use higher precision for key to avoid merging points that are close but distinct
+        // 가깝지만 서로 다른 점들이 병합되는 것을 방지하기 위해 키의 정밀도를 높임
         const key = `${x.toFixed(1)},${y.toFixed(1)}`;
         if (!pointsMap.has(key)) {
           pointsMap.add(key);
@@ -134,7 +134,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         }
       };
 
-      // Add corners
+      // 모서리 점 추가
       addPoint(0, 0);
       addPoint(width, 0);
       addPoint(0, height);
@@ -327,7 +327,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
           });
         }
 
-        // Shuffle triangles for a more organic "popping" effect instead of a swipe reveal
+        // 스와이프 효과 대신 유기적으로 튀어나오는(Popping) 효과를 위해 삼각형 배열을 무작위로 섞음
         for (let i = coloredTriangles.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [coloredTriangles[i], coloredTriangles[j]] = [coloredTriangles[j], coloredTriangles[i]];
@@ -358,7 +358,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
 
     let startTime: number | null = null;
 
-    // Animation phases durations (ms)
+    // 애니메이션 각 단계별 지속 시간 (ms)
     const PHASE_IMAGE = 1500 / animationSpeed;
     const PHASE_SOBEL = 2000 / animationSpeed;
     const PHASE_POINTS = 2000 / animationSpeed;
@@ -425,10 +425,10 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         const progress = Math.min(1, phaseElapsed / PHASE_POINTS);
         const visiblePointsCount = Math.floor(progress * points.length);
 
-        // Draw sobel background faintly
+        // Sobel 배경을 희미하게 그림
         if (sobel) {
           ctx.globalAlpha = 0.3;
-          // Re-using the logic for sobel drawing but simpler
+          // Sobel 그리기 로직 재사용 (단순화됨)
           const tempCanvas = document.createElement('canvas');
           tempCanvas.width = w;
           tempCanvas.height = h;
@@ -466,7 +466,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         const easedProgress = 1 - Math.pow(1 - progress, 3);
         const visibleCount = Math.floor(easedProgress * totalTriangles);
 
-        // Keep points visible but fading out
+        // 점들을 유지하되 서서히 페이드 아웃시킴
         ctx.fillStyle = `rgba(0, 255, 204, ${0.8 * (1 - progress)})`;
         for (let i = 0; i < points.length; i++) {
           ctx.beginPath();
@@ -498,10 +498,10 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
           if (i < coloredCount) {
             ctx.fillStyle = triangles[i].color;
             ctx.fill();
-            // Fade out the white wireframe as we fill
+            // 색상이 채워짐에 따라 하얀색 와이어프레임을 페이드 아웃시킴
             ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - progress)})`;
           } else {
-            // Keep the initial triangulation wireframe visible
+            // 초기 삼각 분할 와이어프레임을 계속 유지함
             ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
           }
           ctx.lineWidth = 0.5;
@@ -544,7 +544,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
-        return; // End animation
+        return; // 애니메이션 종료
       }
 
       animationRef.current = requestAnimationFrame(animate);
