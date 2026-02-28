@@ -237,8 +237,65 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
             }
           }
 
-          pointsRef.current = points;
-          runTriangulation(points, originalData, width, height);
+          // 4. Delaunay Refinement (Too-sharp triangle splitting)
+          // 뾰족하고 길쭉한 기형적인 삼각형(Sliver triangles)이나 너무 거대한 삼각형을 쪼갭니다.
+          let currentPoints = [...points];
+          const refinementPasses = 2; // 2번 정도 반복하여 뾰족한 삼각형을 해소합니다.
+
+          for (let pass = 0; pass < refinementPasses; pass++) {
+            const delaunay = Delaunator.from(currentPoints);
+            const trianglesData = delaunay.triangles;
+            let added = 0;
+            
+            for (let i = 0; i < trianglesData.length; i += 3) {
+              const p1 = currentPoints[trianglesData[i]];
+              const p2 = currentPoints[trianglesData[i + 1]];
+              const p3 = currentPoints[trianglesData[i + 2]];
+              
+              if (!p1 || !p2 || !p3) continue;
+              
+              const l1 = Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
+              const l2 = Math.hypot(p2[0] - p3[0], p2[1] - p3[1]);
+              const l3 = Math.hypot(p3[0] - p1[0], p3[1] - p1[1]);
+              
+              const maxL = Math.max(l1, l2, l3);
+              const minL = Math.min(l1, l2, l3);
+              
+              const s = (l1 + l2 + l3) / 2;
+              const area = Math.sqrt(Math.max(0, s * (s - l1) * (s - l2) * (s - l3)));
+              
+              // 가장 긴 변이 가장 짧은 변보다 4배 이상 길면 "너무 뾰족한" 삼각형으로 간주
+              const isSharp = (maxL / Math.max(1, minL)) > 4;
+              // 화면 전체 면적의 4%를 넘어가면 "너무 거대한" 삼각형으로 간주
+              const isTooLarge = area > (width * height * 0.04);
+              
+              if ((isSharp && area > 50) || isTooLarge) {
+                // 가장 긴 변의 중심점을 새로운 특징점으로 추가하여 삼각형을 분할합니다.
+                let midX, midY;
+                if (maxL === l1) {
+                  midX = (p1[0] + p2[0]) / 2;
+                  midY = (p1[1] + p2[1]) / 2;
+                } else if (maxL === l2) {
+                  midX = (p2[0] + p3[0]) / 2;
+                  midY = (p2[1] + p3[1]) / 2;
+                } else {
+                  midX = (p3[0] + p1[0]) / 2;
+                  midY = (p3[1] + p1[1]) / 2;
+                }
+                
+                const key = `${midX.toFixed(1)},${midY.toFixed(1)}`;
+                if (!pointsMap.has(key)) {
+                  pointsMap.add(key);
+                  currentPoints.push([midX, midY]);
+                  added++;
+                }
+              }
+            }
+            if (added === 0) break;
+          }
+
+          pointsRef.current = currentPoints;
+          runTriangulation(currentPoints, originalData, width, height);
         }, 50);
       } else {
         runTriangulation(points, originalData, width, height);
