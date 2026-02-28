@@ -1,20 +1,16 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 폴리곤 아트 만들기 (Polygon Art Generator)
 
-# Run and deploy your AI Studio app
+> 이 프로젝트는 **Google AI Studio**를 통해 생성되었습니다.
 
-This contains everything you need to run your app locally.
+업로드한 이미지를 분석하여 감각적인 폴리곤 아트(Polygon Art)로 변환해주는 웹 애플리케이션입니다. 모든 이미지 처리 및 변환 과정은 서버 전송 없이 사용자의 브라우저 내에서 안전하게 이루어집니다.
 
-View your app in AI Studio: https://ai.studio/apps/6a3e91d4-d64e-48c1-bae3-981b101d6c31
+## 주요 기능
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+* **이미지 변환:** PNG, JPG, WEBP 형식의 이미지를 업로드하여 폴리곤 아트로 변환할 수 있습니다.
+* **시각적 애니메이션:** 
+  * 원본 이미지 분석 -> 윤곽선 추출 -> 델로네 삼각분할(Delaunay Triangulation) -> 색상 채우기 -> 테두리 숨기기의 전체 과정을 왼쪽에서 오른쪽으로 부드럽게 스와이프되는 애니메이션으로 감상할 수 있습니다.
+* **복원 품질(Reconstruction Quality) 세밀 조정:**
+  * 0%부터 100%까지 슬라이더를 통해 폴리곤의 밀도(삼각형의 개수)를 실시간으로 조절할 수 있습니다.
+  * 품질이 높을수록 수많은 삼각형으로 원본에 가깝게 정교하게 복원되며, 낮을수록 크고 추상적인 형태의 기하학적 폴리곤 아트가 생성됩니다.
+* **자연스러운 색상 추출 (Median Color Sampling):**
+  * 각 삼각형의 색상을 결정할 때 단순 산술 평균이 아닌 내부 픽셀들의 중앙값(Median)을 샘플링합니다. 이를 통해 이미지의 노이즈나 튀는 색상(Popping color)을 방지하고 훨씬 부드럽고 조화로운 결과물을 만들어냅니다.
