@@ -58,6 +58,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
   const [status, setStatus] = useState<string>('이미지 처리 중...');
   
   const trianglesRef = useRef<ColoredTriangle[]>([]);
+  const sobelRef = useRef<Float32Array | null>(null);
+  const pointsRef = useRef<Point[]>([]);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const animationRef = useRef<number | null>(null);
 
@@ -167,6 +169,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
               if (grad > threshold) edgeCount++;
             }
           }
+          sobelRef.current = sobelData;
 
           // Cap points to prevent Delaunator/Canvas from freezing
           // Scale point density by area to prevent excessive noise in smaller or vertical images
@@ -187,6 +190,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
              addPoint(Math.random() * width, Math.random() * height);
           }
 
+          pointsRef.current = points;
           runTriangulation(points, data, width, height);
         }, 50);
       } else {
@@ -238,6 +242,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
     if (!ctx) return;
 
     const triangles = trianglesRef.current;
+    const sobel = sobelRef.current;
+    const points = pointsRef.current;
     const totalTriangles = triangles.length;
     const w = canvas.width;
     const h = canvas.height;
@@ -245,14 +251,15 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
 
     let startTime: number | null = null;
 
-    // Animation phases durations (ms) - Slowed down
-    const PHASE_IMAGE = 2000;
-    const PHASE_WHITE = 1000;
-    const PHASE_LINES = 3000;
-    const PHASE_COLORS = 3000;
-    const PHASE_FADE_EDGES = 2500;
+    // Animation phases durations (ms)
+    const PHASE_IMAGE = 1500;
+    const PHASE_SOBEL = 2000;
+    const PHASE_POINTS = 2000;
+    const PHASE_LINES = 2500;
+    const PHASE_COLORS = 2500;
+    const PHASE_FADE_EDGES = 2000;
 
-    const totalDuration = PHASE_IMAGE + PHASE_WHITE + PHASE_LINES + PHASE_COLORS + PHASE_FADE_EDGES;
+    const totalDuration = PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS + PHASE_LINES + PHASE_COLORS + PHASE_FADE_EDGES;
 
     const drawTrianglePath = (t: ColoredTriangle) => {
       ctx.beginPath();
@@ -272,31 +279,87 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
         setStatus('원본 이미지');
         if (img) ctx.drawImage(img, 0, 0, w, h);
       } 
-      else if (elapsed < PHASE_IMAGE + PHASE_WHITE) {
-        setStatus('바탕 지우는 중...');
+      else if (elapsed < PHASE_IMAGE + PHASE_SOBEL) {
+        setStatus('윤곽선 추출 (Sobel Filter)');
         const phaseElapsed = elapsed - PHASE_IMAGE;
-        const progress = Math.min(1, phaseElapsed / PHASE_WHITE);
+        const progress = Math.min(1, phaseElapsed / PHASE_SOBEL);
         
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-        
-        if (img) {
-          ctx.globalAlpha = 1 - progress;
-          ctx.drawImage(img, 0, 0, w, h);
-          ctx.globalAlpha = 1;
+        if (sobel) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = w;
+          tempCanvas.height = h;
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+            const imageData = tempCtx.createImageData(w, h);
+            for (let i = 0; i < sobel.length; i++) {
+              const val = Math.min(255, sobel[i]);
+              const idx = i * 4;
+              imageData.data[idx] = val;
+              imageData.data[idx + 1] = val;
+              imageData.data[idx + 2] = val;
+              imageData.data[idx + 3] = 255;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+            
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, w, h);
+            ctx.globalAlpha = progress;
+            ctx.drawImage(tempCanvas, 0, 0);
+            ctx.globalAlpha = 1;
+          }
         }
       }
-      else if (elapsed < PHASE_IMAGE + PHASE_WHITE + PHASE_LINES) {
-        setStatus('와이어프레임 그리는 중...');
-        ctx.fillStyle = '#ffffff';
+      else if (elapsed < PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS) {
+        setStatus('특징점 추출');
+        ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, w, h);
 
-        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_WHITE);
+        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_SOBEL);
+        const progress = Math.min(1, phaseElapsed / PHASE_POINTS);
+        const visiblePointsCount = Math.floor(progress * points.length);
+
+        // Draw sobel background faintly
+        if (sobel) {
+          ctx.globalAlpha = 0.3;
+          // Re-using the logic for sobel drawing but simpler
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = w;
+          tempCanvas.height = h;
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+            const imageData = tempCtx.createImageData(w, h);
+            for (let i = 0; i < sobel.length; i++) {
+              const val = Math.min(255, sobel[i]);
+              const idx = i * 4;
+              imageData.data[idx] = val;
+              imageData.data[idx + 1] = val;
+              imageData.data[idx + 2] = val;
+              imageData.data[idx + 3] = 255;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+            ctx.drawImage(tempCanvas, 0, 0);
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.fillStyle = '#00ffcc';
+        for (let i = 0; i < visiblePointsCount; i++) {
+          ctx.beginPath();
+          ctx.arc(points[i][0], points[i][1], 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      else if (elapsed < PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS + PHASE_LINES) {
+        setStatus('델로네 삼각 분할 (Delaunay Triangulation)');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, w, h);
+
+        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS);
         const progress = Math.min(1, phaseElapsed / PHASE_LINES);
         const easedProgress = 1 - Math.pow(1 - progress, 3);
         const visibleCount = Math.floor(easedProgress * totalTriangles);
 
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
         ctx.lineWidth = 0.5;
 
         for (let i = 0; i < visibleCount; i++) {
@@ -304,12 +367,12 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
           ctx.stroke();
         }
       }
-      else if (elapsed < PHASE_IMAGE + PHASE_WHITE + PHASE_LINES + PHASE_COLORS) {
-        setStatus('색상 채우는 중...');
-        ctx.fillStyle = '#ffffff';
+      else if (elapsed < PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS + PHASE_LINES + PHASE_COLORS) {
+        setStatus('색상 데이터 추출 및 채우기');
+        ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, w, h);
 
-        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_WHITE + PHASE_LINES);
+        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS + PHASE_LINES);
         const progress = Math.min(1, phaseElapsed / PHASE_COLORS);
         const easedProgress = 1 - Math.pow(1 - progress, 3);
         const coloredCount = Math.floor(easedProgress * totalTriangles);
@@ -320,20 +383,20 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
           if (i < coloredCount) {
             ctx.fillStyle = triangles[i].color;
             ctx.fill();
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
           } else {
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
           }
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
       else if (elapsed < totalDuration) {
-        setStatus('테두리 숨기는 중...');
+        setStatus('최종 렌더링');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, w, h);
 
-        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_WHITE + PHASE_LINES + PHASE_COLORS);
+        const phaseElapsed = elapsed - (PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS + PHASE_LINES + PHASE_COLORS);
         const progress = Math.min(1, phaseElapsed / PHASE_FADE_EDGES);
 
         for (let i = 0; i < totalTriangles; i++) {
@@ -346,7 +409,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
           ctx.stroke();
 
           if (progress < 1) {
-            ctx.strokeStyle = `rgba(0, 0, 0, ${0.15 * (1 - progress)})`;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - progress)})`;
             ctx.stroke();
           }
         }
