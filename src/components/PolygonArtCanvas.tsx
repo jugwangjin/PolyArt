@@ -115,7 +115,9 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
       const originalData = ctx.getImageData(0, 0, width, height).data;
 
       // 2. 블러 처리된 데이터 저장 (윤곽선 추출용 - 자잘한 텍스처/노이즈 제거)
-      ctx.filter = `blur(${Math.max(1, 5 - q * 4)}px)`;
+      // 품질이 100%일 때는 블러를 없애 원본의 모든 디테일을 잡고, 0%일 때는 강하게 뭉갭니다.
+      const blurAmount = Math.max(0, 10 - q * 10);
+      ctx.filter = `blur(${blurAmount}px)`;
       ctx.drawImage(img, 0, 0, width, height);
       ctx.filter = 'none';
       const blurredData = ctx.getImageData(0, 0, width, height).data;
@@ -139,8 +141,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
       addPoint(width, height);
 
       if (quality > 0) {
-        // 테두리 점 간격 (품질에 따라 10px ~ 80px)
-        const step = Math.max(10, Math.floor(80 - q * 70));
+        // 테두리 점 간격 (품질에 따라 10px ~ 100px)
+        const step = Math.max(10, Math.floor(100 - q * 90));
         for (let i = 0; i <= width; i += step) {
           addPoint(i, 0);
           addPoint(i, height);
@@ -153,8 +155,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         setStatus('윤곽선 추출 중...');
         setTimeout(() => {
           const sobelData = new Float32Array(width * height);
-          // 블러 처리로 인해 그래디언트가 약해졌으므로 threshold를 낮춥니다.
-          const threshold = 15 + (1 - q) * 30;
+          // 품질 100%에서는 미세한 그래디언트도 모두 잡도록 threshold를 대폭 낮춥니다.
+          const threshold = 10 + (1 - q) * 40;
 
           for (let y = 1; y < height - 1; y++) {
             for (let x = 1; x < width - 1; x++) {
@@ -178,43 +180,60 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
           }
           sobelRef.current = sobelData;
 
-          // 3. Grid-based Local Maximum (NMS) 알고리즘
-          // 무작위(Random) 추출 대신, 이미지를 격자로 나누고 각 격자에서 가장 강한 윤곽선 1개만 추출합니다.
-          // 이렇게 하면 점들이 뭉치지 않고 구조적으로 중요한 위치에 고르게 분포되어 일러스트 같은 느낌을 줍니다.
-          const cellSize = Math.max(5, Math.floor(35 - q * 30)); // 격자 크기 (5px ~ 35px)
+          // 3. Adaptive Grid (Quadtree) 기반 Local Maximum 알고리즘
+          // 기본적으로는 일정한 격자(Grid)를 사용하지만, 눈이나 입술처럼 윤곽선(Gradient)이
+          // 매우 강한(Salient) 영역은 격자를 더 잘게 쪼개어(Subdivide) 디테일을 살립니다.
+          const baseCellSize = Math.max(10, Math.floor(50 - q * 40)); // 기본 격자 크기 (10px ~ 50px)
+          const randomProb = 0.01 + q * 0.09; // 평탄한 영역의 무작위 점 확률
+          const salientThreshold = threshold + 30 + (1 - q) * 20; // 강한 윤곽선 기준치
+          const maxDepth = 2; // 최대 분할 깊이 (0: 분할 안함, 1: 4등분, 2: 16등분)
 
-          for (let y = 0; y < height; y += cellSize) {
-            for (let x = 0; x < width; x += cellSize) {
-              let maxGrad = 0;
-              let maxX = -1;
-              let maxY = -1;
+          const processCell = (cx: number, cy: number, size: number, depth: number) => {
+            let maxGrad = 0;
+            let maxX = -1;
+            let maxY = -1;
 
-              // 격자 내에서 가장 강한 윤곽선 찾기
-              for (let cy = y; cy < y + cellSize && cy < height - 1; cy++) {
-                for (let cx = x; cx < x + cellSize && cx < width - 1; cx++) {
-                  const grad = sobelData[cy * width + cx];
-                  if (grad > maxGrad) {
-                    maxGrad = grad;
-                    maxX = cx;
-                    maxY = cy;
-                  }
+            const endY = Math.min(cy + size, height - 1);
+            const endX = Math.min(cx + size, width - 1);
+
+            for (let y = cy; y < endY; y++) {
+              for (let x = cx; x < endX; x++) {
+                const grad = sobelData[y * width + x];
+                if (grad > maxGrad) {
+                  maxGrad = grad;
+                  maxX = x;
+                  maxY = y;
                 }
               }
+            }
 
-              if (maxGrad > threshold) {
-                // 윤곽선이 확실한 곳은 가장 강한 점 하나만 추가
-                addPoint(maxX, maxY);
-              } else {
-                // 윤곽선이 없는 평탄한 곳은 매우 드물게 점을 추가하여 구조 유지
-                if (Math.random() < 0.05) {
-                  const jitterX = (Math.random() - 0.5) * cellSize;
-                  const jitterY = (Math.random() - 0.5) * cellSize;
-                  addPoint(
-                    Math.max(0, Math.min(width, x + cellSize / 2 + jitterX)),
-                    Math.max(0, Math.min(height, y + cellSize / 2 + jitterY))
-                  );
-                }
-              }
+            // 윤곽선이 매우 강하고, 아직 최대 분할 깊이에 도달하지 않았으며, 격자를 더 쪼갤 수 있다면
+            if (maxGrad > salientThreshold && depth < maxDepth && size > 6) {
+              const half = Math.floor(size / 2);
+              processCell(cx, cy, half, depth + 1);
+              processCell(cx + half, cy, half, depth + 1);
+              processCell(cx, cy + half, half, depth + 1);
+              processCell(cx + half, cy + half, half, depth + 1);
+              return;
+            }
+
+            if (maxGrad > threshold) {
+              // 윤곽선이 확실한 곳은 가장 강한 점 하나만 추가
+              addPoint(maxX, maxY);
+            } else if (depth === 0 && Math.random() < randomProb) {
+              // 윤곽선이 없는 평탄한 곳은 매우 드물게 점을 추가하여 구조 유지 (최상위 격자에서만)
+              const jitterX = (Math.random() - 0.5) * size;
+              const jitterY = (Math.random() - 0.5) * size;
+              addPoint(
+                Math.max(0, Math.min(width, cx + size / 2 + jitterX)),
+                Math.max(0, Math.min(height, cy + size / 2 + jitterY))
+              );
+            }
+          };
+
+          for (let y = 0; y < height; y += baseCellSize) {
+            for (let x = 0; x < width; x += baseCellSize) {
+              processCell(x, y, baseCellSize, 0);
             }
           }
 
