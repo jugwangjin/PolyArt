@@ -4,6 +4,7 @@ import Delaunator from 'delaunator';
 interface PolygonArtCanvasProps {
   imageSrc: string;
   quality: number;
+  animationSpeed?: number;
 }
 
 type Point = [number, number];
@@ -52,7 +53,7 @@ const getMedianColor = (p1: Point, p2: Point, p3: Point, data: Uint8ClampedArray
   };
 };
 
-const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }) => {
+const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, animationSpeed = 1.0 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [status, setStatus] = useState<string>('이미지 처리 중...');
@@ -94,7 +95,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [imageSrc, quality]);
+  }, [imageSrc, quality, animationSpeed]);
 
   const processImage = (img: HTMLImageElement, width: number, height: number) => {
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
@@ -252,12 +253,12 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
     let startTime: number | null = null;
 
     // Animation phases durations (ms)
-    const PHASE_IMAGE = 1500;
-    const PHASE_SOBEL = 2000;
-    const PHASE_POINTS = 2000;
-    const PHASE_LINES = 2500;
-    const PHASE_COLORS = 2500;
-    const PHASE_FADE_EDGES = 2000;
+    const PHASE_IMAGE = 1500 / animationSpeed;
+    const PHASE_SOBEL = 2000 / animationSpeed;
+    const PHASE_POINTS = 2000 / animationSpeed;
+    const PHASE_LINES = 2500 / animationSpeed;
+    const PHASE_COLORS = 2500 / animationSpeed;
+    const PHASE_FADE_EDGES = 2000 / animationSpeed;
 
     const totalDuration = PHASE_IMAGE + PHASE_SOBEL + PHASE_POINTS + PHASE_LINES + PHASE_COLORS + PHASE_FADE_EDGES;
 

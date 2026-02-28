@@ -6,6 +6,8 @@ export default function App() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [quality, setQuality] = useState<number>(50);
   const [committedQuality, setCommittedQuality] = useState<number>(50);
+  const [speed, setSpeed] = useState<number>(1.0);
+  const [committedSpeed, setCommittedSpeed] = useState<number>(1.0);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -78,7 +80,24 @@ export default function App() {
                   onChange={(e) => setQuality(Number(e.target.value))}
                   onMouseUp={() => setCommittedQuality(quality)}
                   onTouchEnd={() => setCommittedQuality(quality)}
-                  className="w-full sm:w-48 accent-white"
+                  className="w-full sm:w-32 accent-white"
+                />
+              </div>
+              <div className="flex items-center gap-4 w-full sm:w-auto">
+                <label className="text-sm text-zinc-400 flex items-center gap-2 whitespace-nowrap">
+                  <Settings2 className="w-4 h-4" />
+                  재생 속도: {speed}x
+                </label>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="4.0" 
+                  step="0.1"
+                  value={speed}
+                  onChange={(e) => setSpeed(Number(e.target.value))}
+                  onMouseUp={() => setCommittedSpeed(speed)}
+                  onTouchEnd={() => setCommittedSpeed(speed)}
+                  className="w-full sm:w-32 accent-white"
                 />
               </div>
               <button
@@ -90,7 +109,11 @@ export default function App() {
               </button>
             </div>
             <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 shadow-2xl">
-              <PolygonArtCanvas imageSrc={imageSrc} quality={committedQuality} />
+              <PolygonArtCanvas 
+                imageSrc={imageSrc} 
+                quality={committedQuality} 
+                animationSpeed={committedSpeed}
+              />
             </div>
           </div>
         )}
