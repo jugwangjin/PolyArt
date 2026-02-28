@@ -27,7 +27,7 @@ export default function App() {
           </h1>
           <div className="flex items-center justify-center gap-6 text-sm text-zinc-400 pt-2">
             <a 
-              href="https://github.com/jugwangjin/PolyArt" 
+              href="https://github.com/jugwangjin/polyart" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="flex items-center gap-2 hover:text-white transition-colors"
