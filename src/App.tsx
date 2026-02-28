@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Image as ImageIcon, Settings2 } from 'lucide-react';
+import { Upload, Image as ImageIcon, Settings2, Github, Instagram } from 'lucide-react';
 import PolygonArtCanvas from './components/PolygonArtCanvas';
 
 export default function App() {
@@ -25,6 +25,26 @@ export default function App() {
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">
             폴리곤 아트 만들기
           </h1>
+          <div className="flex items-center justify-center gap-6 text-sm text-zinc-400 pt-2">
+            <a 
+              href="https://github.com/jugwangjin/PolyArt" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="flex items-center gap-2 hover:text-white transition-colors"
+            >
+              <Github className="w-5 h-5" />
+              <span>GitHub</span>
+            </a>
+            <a 
+              href="https://instagram.com/panggun_ju" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="flex items-center gap-2 hover:text-white transition-colors"
+            >
+              <Instagram className="w-5 h-5" />
+              <span>@panggun_ju</span>
+            </a>
+          </div>
         </div>
 
         {!imageSrc ? (
