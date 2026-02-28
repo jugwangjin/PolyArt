@@ -4,8 +4,8 @@ import PolygonArtCanvas from './components/PolygonArtCanvas';
 
 export default function App() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [quality, setQuality] = useState<number>(50);
-  const [committedQuality, setCommittedQuality] = useState<number>(50);
+  const [quality, setQuality] = useState<number>(75);
+  const [committedQuality, setCommittedQuality] = useState<number>(75);
   const [speed, setSpeed] = useState<number>(1.0);
   const [committedSpeed, setCommittedSpeed] = useState<number>(1.0);
 
