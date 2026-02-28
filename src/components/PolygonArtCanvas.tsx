@@ -68,7 +68,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
     img.onload = () => {
       imageRef.current = img;
       const maxWidth = 800;
-      const maxHeight = 600;
+      const maxHeight = 800; // Increased to handle vertical images better
       let width = img.width;
       let height = img.height;
 
@@ -80,6 +80,10 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
         width = (maxHeight * width) / height;
         height = maxHeight;
       }
+
+      // Floor dimensions to avoid sub-pixel issues in loops and arrays
+      width = Math.floor(width);
+      height = Math.floor(height);
 
       setDimensions({ width, height });
       processImage(img, width, height);
@@ -109,7 +113,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
       const points: Point[] = [];
       
       const addPoint = (x: number, y: number) => {
-        const key = `${Math.round(x)},${Math.round(y)}`;
+        // Use higher precision for key to avoid merging points that are close but distinct
+        const key = `${x.toFixed(1)},${y.toFixed(1)}`;
         if (!pointsMap.has(key)) {
           pointsMap.add(key);
           points.push([x, y]);
@@ -164,7 +169,9 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
           }
 
           // Cap points to prevent Delaunator/Canvas from freezing
-          const targetEdgePoints = 12000 * q; 
+          // Scale point density by area to prevent excessive noise in smaller or vertical images
+          const areaScale = Math.max(0.3, (width * height) / 480000);
+          const targetEdgePoints = 12000 * q * areaScale; 
           const actualDensity = Math.min(q * 0.5, targetEdgePoints / Math.max(1, edgeCount));
 
           for (let y = 1; y < height - 1; y++) {
@@ -175,7 +182,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
             }
           }
 
-          const numRandomPoints = Math.floor(3000 * q);
+          const numRandomPoints = Math.floor(3000 * q * areaScale);
           for (let i = 0; i < numRandomPoints; i++) {
              addPoint(Math.random() * width, Math.random() * height);
           }
@@ -368,7 +375,7 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="relative overflow-hidden rounded-lg bg-zinc-950 shadow-inner" style={{ width: dimensions.width || 800, height: dimensions.height || 600 }}>
+      <div className="relative overflow-hidden rounded-lg bg-zinc-950 shadow-inner" style={{ width: dimensions.width || 800, height: dimensions.height || 800 }}>
         {dimensions.width === 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
@@ -376,8 +383,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality }
         )}
         <canvas
           ref={canvasRef}
-          width={dimensions.width}
-          height={dimensions.height}
+          width={dimensions.width || 800}
+          height={dimensions.height || 800}
           className="block"
         />
       </div>
