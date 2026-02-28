@@ -186,7 +186,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
             }
           }
 
-          const numRandomPoints = Math.floor(3000 * q * areaScale);
+          // 배경과 단색 영역의 적절한 폴리곤 크기를 위해 무작위 점을 1000개 수준으로 조정합니다.
+          const numRandomPoints = Math.floor(1000 * q * areaScale);
           for (let i = 0; i < numRandomPoints; i++) {
              addPoint(Math.random() * width, Math.random() * height);
           }
@@ -224,8 +225,11 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
           });
         }
 
-        // Sort triangles from left to right for swipe reveal effect
-        coloredTriangles.sort((a, b) => a.center[0] - b.center[0]);
+        // Shuffle triangles for a more organic "popping" effect instead of a swipe reveal
+        for (let i = coloredTriangles.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [coloredTriangles[i], coloredTriangles[j]] = [coloredTriangles[j], coloredTriangles[i]];
+        }
 
         trianglesRef.current = coloredTriangles;
         startAnimation();
@@ -360,6 +364,14 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         const easedProgress = 1 - Math.pow(1 - progress, 3);
         const visibleCount = Math.floor(easedProgress * totalTriangles);
 
+        // Keep points visible but fading out
+        ctx.fillStyle = `rgba(0, 255, 204, ${0.8 * (1 - progress)})`;
+        for (let i = 0; i < points.length; i++) {
+          ctx.beginPath();
+          ctx.arc(points[i][0], points[i][1], 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
         ctx.lineWidth = 0.5;
 
@@ -384,8 +396,10 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
           if (i < coloredCount) {
             ctx.fillStyle = triangles[i].color;
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            // Fade out the white wireframe as we fill
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - progress)})`;
           } else {
+            // Keep the initial triangulation wireframe visible
             ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
           }
           ctx.lineWidth = 0.5;
