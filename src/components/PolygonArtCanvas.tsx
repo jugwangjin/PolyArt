@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Delaunator from 'delaunator';
+import { Download } from 'lucide-react';
 
 interface PolygonArtCanvasProps {
   imageSrc: string;
@@ -553,6 +554,15 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
     animationRef.current = requestAnimationFrame(animate);
   };
 
+  const handleSave = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = 'polyart.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }, []);
+
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="relative overflow-hidden rounded-lg bg-zinc-950 shadow-inner" style={{ width: dimensions.width || 800, height: dimensions.height || 800 }}>
@@ -574,6 +584,15 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         <span className="text-sm font-mono text-zinc-300 uppercase tracking-wider">
           {status}
         </span>
+        {status === '완성' && (
+          <button
+            onClick={handleSave}
+            className="ml-2 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>저장</span>
+          </button>
+        )}
       </div>
     </div>
   );
