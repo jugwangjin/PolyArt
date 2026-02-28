@@ -108,9 +108,17 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
 
+      const q = quality / 100;
+
+      // 1. 원본 데이터 저장 (색상 추출용)
       ctx.drawImage(img, 0, 0, width, height);
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
+      const originalData = ctx.getImageData(0, 0, width, height).data;
+
+      // 2. 블러 처리된 데이터 저장 (윤곽선 추출용 - 자잘한 텍스처/노이즈 제거)
+      ctx.filter = `blur(${Math.max(1, 5 - q * 4)}px)`;
+      ctx.drawImage(img, 0, 0, width, height);
+      ctx.filter = 'none';
+      const blurredData = ctx.getImageData(0, 0, width, height).data;
 
       const pointsMap = new Set<string>();
       const points: Point[] = [];
@@ -131,9 +139,8 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
       addPoint(width, height);
 
       if (quality > 0) {
-        const q = quality / 100;
-        
-        const step = Math.max(10, Math.floor(100 - q * 90));
+        // 테두리 점 간격 (품질에 따라 10px ~ 80px)
+        const step = Math.max(10, Math.floor(80 - q * 70));
         for (let i = 0; i <= width; i += step) {
           addPoint(i, 0);
           addPoint(i, height);
@@ -146,14 +153,14 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
         setStatus('윤곽선 추출 중...');
         setTimeout(() => {
           const sobelData = new Float32Array(width * height);
-          let edgeCount = 0;
-          const threshold = 20 + (1 - q) * 50;
+          // 블러 처리로 인해 그래디언트가 약해졌으므로 threshold를 낮춥니다.
+          const threshold = 15 + (1 - q) * 30;
 
           for (let y = 1; y < height - 1; y++) {
             for (let x = 1; x < width - 1; x++) {
               const getGray = (ox: number, oy: number) => {
                 const idx = ((y + oy) * width + (x + ox)) * 4;
-                return data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
+                return blurredData[idx] * 0.299 + blurredData[idx + 1] * 0.587 + blurredData[idx + 2] * 0.114;
               };
 
               const gx =
@@ -167,36 +174,55 @@ const PolygonArtCanvas: React.FC<PolygonArtCanvasProps> = ({ imageSrc, quality, 
 
               const grad = Math.sqrt(gx * gx + gy * gy);
               sobelData[y * width + x] = grad;
-              if (grad > threshold) edgeCount++;
             }
           }
           sobelRef.current = sobelData;
 
-          // Cap points to prevent Delaunator/Canvas from freezing
-          // Scale point density by area to prevent excessive noise in smaller or vertical images
-          const areaScale = Math.max(0.3, (width * height) / 480000);
-          const targetEdgePoints = 12000 * q * areaScale; 
-          const actualDensity = Math.min(q * 0.5, targetEdgePoints / Math.max(1, edgeCount));
+          // 3. Grid-based Local Maximum (NMS) 알고리즘
+          // 무작위(Random) 추출 대신, 이미지를 격자로 나누고 각 격자에서 가장 강한 윤곽선 1개만 추출합니다.
+          // 이렇게 하면 점들이 뭉치지 않고 구조적으로 중요한 위치에 고르게 분포되어 일러스트 같은 느낌을 줍니다.
+          const cellSize = Math.max(5, Math.floor(35 - q * 30)); // 격자 크기 (5px ~ 35px)
 
-          for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-              if (sobelData[y * width + x] > threshold && Math.random() < actualDensity) {
-                addPoint(x, y);
+          for (let y = 0; y < height; y += cellSize) {
+            for (let x = 0; x < width; x += cellSize) {
+              let maxGrad = 0;
+              let maxX = -1;
+              let maxY = -1;
+
+              // 격자 내에서 가장 강한 윤곽선 찾기
+              for (let cy = y; cy < y + cellSize && cy < height - 1; cy++) {
+                for (let cx = x; cx < x + cellSize && cx < width - 1; cx++) {
+                  const grad = sobelData[cy * width + cx];
+                  if (grad > maxGrad) {
+                    maxGrad = grad;
+                    maxX = cx;
+                    maxY = cy;
+                  }
+                }
+              }
+
+              if (maxGrad > threshold) {
+                // 윤곽선이 확실한 곳은 가장 강한 점 하나만 추가
+                addPoint(maxX, maxY);
+              } else {
+                // 윤곽선이 없는 평탄한 곳은 매우 드물게 점을 추가하여 구조 유지
+                if (Math.random() < 0.05) {
+                  const jitterX = (Math.random() - 0.5) * cellSize;
+                  const jitterY = (Math.random() - 0.5) * cellSize;
+                  addPoint(
+                    Math.max(0, Math.min(width, x + cellSize / 2 + jitterX)),
+                    Math.max(0, Math.min(height, y + cellSize / 2 + jitterY))
+                  );
+                }
               }
             }
           }
 
-          // 배경과 단색 영역의 적절한 폴리곤 크기를 위해 무작위 점을 1000개 수준으로 조정합니다.
-          const numRandomPoints = Math.floor(1000 * q * areaScale);
-          for (let i = 0; i < numRandomPoints; i++) {
-             addPoint(Math.random() * width, Math.random() * height);
-          }
-
           pointsRef.current = points;
-          runTriangulation(points, data, width, height);
+          runTriangulation(points, originalData, width, height);
         }, 50);
       } else {
-        runTriangulation(points, data, width, height);
+        runTriangulation(points, originalData, width, height);
       }
     }, 50);
   };
